@@ -268,13 +268,13 @@ void handleButtonPress() {
       
     case CONNECTED:
       // Start recording
-      sendCommand("START_RECORDING");
+      sendCommand("START");
       setState(RECORDING);
       break;
       
     case RECORDING:
       // Stop recording
-      sendCommand("STOP_RECORDING");
+      sendCommand("STOP");
       setState(STOPPING);
       // Simulate waiting for camera to stop and save
       delay(500);
