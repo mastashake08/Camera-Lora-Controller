@@ -46,7 +46,10 @@ unsigned long scanStartTime = 0;
 const unsigned long SCAN_TIMEOUT = 10000;  // 10 seconds
 String errorMessage = "";
 unsigned long lastButtonPress = 0;
+unsigned long buttonPressStart = 0;
+bool buttonPressed = false;
 const unsigned long DEBOUNCE_DELAY = 300;
+const unsigned long LONG_PRESS_DURATION = 3000;  // 3 seconds for shutdown
 
 // BLE Callbacks
 class MyAdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
@@ -84,6 +87,7 @@ void startBLEScan();
 bool connectToCamera();
 void sendCommand(const String& command);
 void handleButtonPress();
+void handleLongPress();
 void setState(CameraState newState);
 
 // Initialize OLED Display
@@ -245,6 +249,27 @@ void sendCommand(const String& command) {
   pRemoteCharacteristic->writeValue(command.c_str(), command.length());
 }
 
+// Handle Long Press (Shutdown)
+void handleLongPress() {
+  Serial.println("Long press detected - shutting down");
+  
+  // Disconnect BLE if connected
+  if (pClient != nullptr && pClient->isConnected()) {
+    pClient->disconnect();
+  }
+  
+  // Show shutdown message
+  updateDisplay("Shutting down...\nGoodbye!");
+  delay(1000);
+  
+  // Turn off display
+  display.clear();
+  display.display();
+  
+  // Deep sleep (power off)
+  esp_deep_sleep_start();
+}
+
 // Handle Button Press
 void handleButtonPress() {
   unsigned long currentTime = millis();
@@ -303,9 +328,30 @@ void setup() {
 }
 
 void loop() {
-  // Check button press
+  // Check button state
   if (digitalRead(BTN_RECORD) == LOW) {
-    handleButtonPress();
+    if (!buttonPressed) {
+      // Button just pressed
+      buttonPressed = true;
+      buttonPressStart = millis();
+    } else {
+      // Button still held - check for long press
+      if (millis() - buttonPressStart >= LONG_PRESS_DURATION) {
+        handleLongPress();
+      }
+    }
+  } else {
+    // Button released
+    if (buttonPressed) {
+      unsigned long pressDuration = millis() - buttonPressStart;
+      
+      // Only trigger short press if it wasn't a long press
+      if (pressDuration < LONG_PRESS_DURATION) {
+        handleButtonPress();
+      }
+      
+      buttonPressed = false;
+    }
   }
   
   // Handle scanning
